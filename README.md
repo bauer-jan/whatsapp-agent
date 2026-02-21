@@ -10,19 +10,15 @@ You (WhatsApp) → neonize → poll loop → Strands Agent (LLM) → tools → n
 
 ## Design decisions
 
-**Session-per-phone isolation** — Each phone number gets its own Strands agent instance with separate conversation history via `FileSessionManager`. No cross-contamination.
+Each phone number gets its own Strands agent instance with separate conversation history via `FileSessionManager`. No cross-contamination.
 
-**Agent decides when to respond** — The agent receives messages as context and explicitly calls `reply` or `write_message` tools to send. If it has nothing to say, it stays silent. No auto-forwarding.
+The agent receives messages as context and explicitly calls `reply` or `write_message` tools to send. If it has nothing to say, it stays silent. No auto-forwarding.
 
-**Zero-cost context injection** — Your outgoing messages (DMs and group chats) are written directly to the session history without triggering an LLM call. The agent sees them as prior context next time it responds.
+Your outgoing messages (DMs and group chats) are written directly to the session history without triggering an LLM call. The agent sees them as prior context next time it responds.
 
-**It becomes someone** — On first run, the agent starts a conversation with you (BOOTSTRAP.md) to figure out its name, personality, and vibe. Then it writes its own SOUL.md. From that point on, it has a persistent identity.
+On first run, the agent starts a conversation with you (BOOTSTRAP.md) to figure out its name, personality, and vibe. Then it writes its own SOUL.md. From that point on, it has a persistent identity.
 
-**Filesystem as Persona** — The agent's identity and behavior are plain markdown files on disk. No database. The agent reads them on every message and can update them at runtime.
-
-**Per-task heartbeat scheduling** — Background tasks defined in HEARTBEAT.md run on individual intervals (`[every N min]` syntax). The agent can check in or do anything else autonomously while nobody's talking to it.
-
-**WhatsApp LID resolution** — WhatsApp may deliver messages with a LID (Linked ID) instead of the sender's phone number. The poll loop transparently resolves LIDs to real phone numbers using the chat JID, so routing and session isolation work correctly regardless.
+Background tasks defined in HEARTBEAT.md run on individual intervals (`[every N min]` syntax). The agent can check in or do anything else autonomously while nobody's talking to it.
 
 ## Quick start
 

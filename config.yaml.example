@@ -1,0 +1,11 @@
+# Copy to config.yaml and fill in your values
+admin_phone: "5511999999999"
+persona_dir: "persona/"
+session_storage_dir: "sessions/"
+poll_interval: 5.0
+response_mode: "whitelist"          # all | admin_only | whitelist
+whitelist:                     # phone numbers or group JIDs for whitelist mode
+  # - "5522888888888"
+  # - "120363001234567890@g.us"
+log_level: "INFO"
+log_file: "agent.log"

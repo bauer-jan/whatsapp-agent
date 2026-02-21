@@ -1,0 +1,45 @@
+*.js
+!jest.config.js
+*.d.ts
+node_modules
+
+# CDK asset staging directory
+.cdk.staging
+cdk.out
+
+.venv
+.env
+.DS_Store
+
+# Python 
+__pycache__/
+.pytest_cache/
+.hypothesis/
+tests/__pycache__
+# Agent persona (live files with personal data, generated at runtime)
+persona/
+
+# Agent config (contains phone numbers)
+config.yaml
+
+# Agent runtime data
+sessions/
+whatsapp.sqlite3
+agent.log
+
+# Deploy/install scripts (environment-specific)
+deploy.sh
+install.sh
+
+# JSONS
+infra/scripts/*.json
+
+# Kiro AI 
+.kiro/
+
+release.tar.gz
+.coverage
+
+
+# Ruff
+.ruff_cache/

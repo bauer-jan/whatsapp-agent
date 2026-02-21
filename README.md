@@ -4,6 +4,10 @@ A personal AI assistant that lives on WhatsApp. Built with [Strands Agents](http
 
 No API keys, no cloud messaging service — it connects directly to WhatsApp Web via QR code, polls for messages, and responds through an LLM on Amazon Bedrock.
 
+![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)
+![Go](https://img.shields.io/badge/Go-1.22-00ADD8?logo=go)
+![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)
+![Release](https://img.shields.io/github/v/release/bauer-jan/whatsapp-agent)
 ![WhatsApp Agent Architecture](image.png)
 
 ```

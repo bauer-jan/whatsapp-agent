@@ -10,9 +10,9 @@ whitelist:                     # phone numbers or group JIDs for whitelist mode
 log_level: "INFO"
 log_file: "agent.log"
 
-mcp_servers:
-  - name: "filesystem"
-    transport: "stdio"
-    command: "npx"
-    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
-    role: "admin"
+#mcp_servers:
+#  - name: "filesystem"
+#    transport: "stdio"
+#    command: "npx"
+#    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+#    role: "admin"

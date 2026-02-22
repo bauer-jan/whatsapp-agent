@@ -11,7 +11,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-PERSONA_FILES = ("SOUL.md", "USER.md", "HEARTBEAT.md")
+PERSONA_FILES = ("SOUL.md", "USER.md", "HEARTBEAT.md", "BOOTSTRAP.md")
 
 
 @dataclass

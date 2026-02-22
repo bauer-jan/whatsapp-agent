@@ -53,15 +53,11 @@ If a server fails to start, the agent logs the error and continues with the rema
 
 **Agent decides when to respond** — The agent receives messages as context and explicitly calls `reply` or `write_message` tools to send. If it has nothing to say, it stays silent. No auto-forwarding.
 
-**Zero-cost context injection** — Your outgoing messages (DMs and group chats) are written directly to the session history without triggering an LLM call. The agent sees them as prior context next time it responds.
-
 **It becomes someone** — On first run, the agent starts a conversation with you (BOOTSTRAP.md) to figure out its name, personality, and vibe. Then it writes its own SOUL.md. From that point on, it has a persistent identity.
 
 **Filesystem as Persona** — The agent's identity and behavior are plain markdown files on disk. No database. The agent reads them on every message and can update them at runtime.
 
 **Per-task heartbeat scheduling** — Background tasks defined in HEARTBEAT.md run on individual intervals (`[every N min]` syntax). The agent can check in or do anything else autonomously while nobody's talking to it.
-
-**WhatsApp LID resolution** — WhatsApp may deliver messages with a LID (Linked ID) instead of the sender's phone number. The poll loop transparently resolves LIDs to real phone numbers using the chat JID, so routing and session isolation work correctly regardless.
 
 
 ## Quick start
@@ -81,22 +77,12 @@ uv sync
 uv run main.py
 ```
 
-Scan the QR code with WhatsApp on first run. Sessions persist in `whatsapp.sqlite3` after that.
-
-### First run (bootstrap)
-
-To trigger the bootstrap conversation, copy the template:
-
-```bash
-cp templates/BOOTSTRAP.md persona/BOOTSTRAP.md
-```
-
-The agent will send you a short intro message, learn your name and preferences over a few messages, then write its own SOUL.md and USER.md. The file is deleted after bootstrap completes and won't run again.
+Scan the QR code with WhatsApp on first run. The agent will send you a short intro message, learn your name and preferences over a few messages, then write its own SOUL.md and USER.md. The file is deleted after bootstrap completes and won't run again.
 
 ### Configuration
 
 ```yaml
-admin_phone: "5511999999999"    # Your phone number (digits only)
+admin_phone: "5511999999999"    # Your phone number (digits only, include country prefix, eg. for Germany 49XXXX)
 response_mode: "whitelist"      # all | admin_only | whitelist
 whitelist:                      # phone numbers or group JIDs
   # - "5522888888888"
@@ -112,29 +98,6 @@ log_file: "agent.log"
 - `all` — everyone (not recommended — any number triggers LLM calls)
 - `admin_only` — only you
 - `whitelist` — you + listed numbers and groups
-
-## Persona system
-
-Markdown files in `persona/` define everything about the agent. On first run, SOUL.md, USER.md, and HEARTBEAT.md are copied from `templates/`.
-
-| File | What it does |
-|------|-------------|
-| `SOUL.md` | Personality, communication style, boundaries |
-| `USER.md` | What the agent knows about you (admin prompt only) |
-| `HEARTBEAT.md` | Periodic background tasks with `[every N min]` intervals |
-| `BOOTSTRAP.md` | First-run conversation to establish identity (deleted after use) |
-
-The agent updates these at runtime via `update_soul`, `update_user_profile`, and `update_heartbeat` tools. Templates in `templates/` are never modified.
-
-## Message routing
-
-| Scenario | What happens |
-|----------|-------------|
-| You DM the agent (self-chat) | Agent responds via `reply` tool |
-| You DM someone else | Silently injected into that contact's session (zero tokens) |
-| You message a group | Silently injected into that group's session (zero tokens) |
-| Someone DMs the agent | Agent responds via `reply` tool (if allowed by response_mode) |
-| Someone messages a group | Agent responds to the group via `reply` tool (if allowed) |
 
 ## Tools
 
@@ -173,50 +136,3 @@ templates/             # Read-only defaults (copied to persona/ on first run)
 persona/               # Live agent identity (updated at runtime, gitignored)
 tests/                 # Unit and property-based tests
 ```
-
-## Deploy (EC2)
-
-```bash
-# Full deploy: package → S3 → install on EC2 → restart agent
-./deploy.sh eu-central-1 i-0abc123def456
-
-# Package a release tarball and upload to EC2 home dir (no redeploy)
-./deploy.sh --github
-```
-
-On the EC2 instance:
-```bash
-export BUCKET=wa-agent-ACCOUNT-REGION
-./install.sh                    # preserves persona/ and sessions/
-./install.sh --reset-templates  # overwrites persona/ from templates/
-./install.sh --clean-sessions   # wipes conversation history
-```
-
-## Tests
-
-```bash
-uv run pytest tests/ -v
-```
-
-MCP-specific tests:
-
-```bash
-# Config parsing (unit + property-based)
-uv run pytest tests/test_config.py tests/test_mcp_config_properties.py -v
-
-# MCPManager lifecycle (unit + property-based)
-uv run pytest tests/test_mcp_manager.py tests/test_mcp_manager_properties.py -v
-```
-
-Manual integration test — add an MCP server to `config.yaml` and start the agent. Look for:
-
-```
-MCP server 'filesystem' started (X tools)
-▸ tools: N admin (M native + X mcp), ...
-```
-
-If the server binary isn't available, the agent logs the error and continues with native tools only.
-
-## License
-
-MIT

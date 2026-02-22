@@ -10,10 +10,6 @@ Built with [Strands Agents](https://github.com/strands-agents/sdk-python) and [n
 
 ![Screenshot](/logo.png)
 
-```
-You (WhatsApp) → neonize → poll loop → Strands Agent (LLM) → tools/MCP Server → neonize → WhatsApp
-```
-
 ## MCP servers
 
 Extend the agent with external tools by registering [MCP](https://modelcontextprotocol.io/) servers in `config.yaml`. Tools are discovered automatically at startup and injected into the existing permission pipeline alongside native tools.

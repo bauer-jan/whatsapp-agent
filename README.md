@@ -46,20 +46,6 @@ Tools from `admin` servers are only available to the admin user. Tools from `pub
 
 If a server fails to start, the agent logs the error and continues with the remaining servers. No MCP servers configured? The agent behaves exactly as before.
 
-
-## Design decisions
-
-**Session-per-number isolation** — Each phone number gets its own Strands agent instance with separate conversation history via `FileSessionManager`. No cross-contamination.
-
-**Agent decides when to respond** — The agent receives messages as context and explicitly calls `reply` or `write_message` tools to send. If it has nothing to say, it stays silent. No auto-forwarding.
-
-**It becomes someone** — On first run, the agent starts a conversation with you (BOOTSTRAP.md) to figure out its name, personality, and vibe. Then it writes its own SOUL.md. From that point on, it has a persistent identity.
-
-**Filesystem as Persona** — The agent's identity and behavior are plain markdown files on disk. No database. The agent reads them on every message and can update them at runtime.
-
-**Per-task heartbeat scheduling** — Background tasks defined in HEARTBEAT.md run on individual intervals (`[every N min]` syntax). The agent can check in or do anything else autonomously while nobody's talking to it.
-
-
 ## Quick start
 
 ### Prerequisites
@@ -77,7 +63,20 @@ uv sync
 uv run main.py
 ```
 
-Scan the QR code with WhatsApp on first run. The agent will send you a short intro message, learn your name and preferences over a few messages, then write its own SOUL.md and USER.md. The file is deleted after bootstrap completes and won't run again.
+**Scan the QR code with WhatsApp on first run. The agent will send you a short intro message, learn your name and preferences over a few messages, then write its own SOUL.md and USER.md. The file is deleted after bootstrap completes and won't run again.**
+
+## Design decisions
+
+**Session-per-number isolation** — Each phone number gets its own Strands agent instance with separate conversation history via `FileSessionManager`. No cross-contamination.
+
+**Agent decides when to respond** — The agent receives messages as context and explicitly calls `reply` or `write_message` tools to send. If it has nothing to say, it stays silent. No auto-forwarding.
+
+**It becomes someone** — On first run, the agent starts a conversation with you (BOOTSTRAP.md) to figure out its name, personality, and vibe. Then it writes its own SOUL.md. From that point on, it has a persistent identity.
+
+**Filesystem as Persona** — The agent's identity and behavior are plain markdown files on disk. No database. The agent reads them on every message and can update them at runtime.
+
+**Per-task heartbeat scheduling** — Background tasks defined in HEARTBEAT.md run on individual intervals (`[every N min]` syntax). The agent can check in or do anything else autonomously while nobody's talking to it.
+
 
 ### Configuration
 

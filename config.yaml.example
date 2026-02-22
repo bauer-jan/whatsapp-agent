@@ -9,3 +9,10 @@ whitelist:                     # phone numbers or group JIDs for whitelist mode
   # - "120363001234567890@g.us"
 log_level: "INFO"
 log_file: "agent.log"
+
+mcp_servers:
+  - name: "filesystem"
+    transport: "stdio"
+    command: "npx"
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+    role: "admin"

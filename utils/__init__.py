@@ -2,6 +2,7 @@
 
 from utils.config import AgentConfig
 from utils.heartbeat import HeartbeatLoop
+from utils.mcp_manager import MCPManager
 from utils.persona_loader import PersonaLoader
 from utils.poll_loop import is_allowed, run as run_poll_loop
 from utils.agent_manager import AgentManager
@@ -12,6 +13,7 @@ __all__ = [
     "AgentConfig",
     "AgentManager",
     "HeartbeatLoop",
+    "MCPManager",
     "PersonaLoader",
     "WhatsAppClient",
     "WhatsAppMessage",

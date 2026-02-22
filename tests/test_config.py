@@ -80,3 +80,97 @@ class TestInvalidResponseMode:
         path = config_file(f'admin_phone: "123"\nresponse_mode: "{mode}"\n')
         cfg = AgentConfig.from_file(path)
         assert cfg.response_mode == mode
+
+
+class TestMCPServersInAgentConfig:
+    """Test mcp_servers parsing in AgentConfig.from_file()."""
+
+    def test_no_mcp_servers_key_defaults_empty(self, config_file):
+        path = config_file('admin_phone: "123"\n')
+        cfg = AgentConfig.from_file(path)
+        assert cfg.mcp_servers == ()
+
+    def test_empty_mcp_servers_list(self, config_file):
+        path = config_file('admin_phone: "123"\nmcp_servers: []\n')
+        cfg = AgentConfig.from_file(path)
+        assert cfg.mcp_servers == ()
+
+    def test_mcp_servers_null_defaults_empty(self, config_file):
+        path = config_file('admin_phone: "123"\nmcp_servers:\n')
+        cfg = AgentConfig.from_file(path)
+        assert cfg.mcp_servers == ()
+
+    def test_single_stdio_server_parsed(self, config_file):
+        content = (
+            'admin_phone: "123"\n'
+            "mcp_servers:\n"
+            '  - name: "fs"\n'
+            '    transport: "stdio"\n'
+            '    command: "npx"\n'
+            "    args: [-y, server-fs]\n"
+        )
+        path = config_file(content)
+        cfg = AgentConfig.from_file(path)
+        assert len(cfg.mcp_servers) == 1
+        assert cfg.mcp_servers[0].name == "fs"
+        assert cfg.mcp_servers[0].transport == "stdio"
+        assert cfg.mcp_servers[0].command == "npx"
+        assert cfg.mcp_servers[0].args == ("-y", "server-fs")
+        assert cfg.mcp_servers[0].role == "admin"
+
+    def test_multiple_servers_parsed(self, config_file):
+        content = (
+            'admin_phone: "123"\n'
+            "mcp_servers:\n"
+            '  - name: "fs"\n'
+            '    transport: "stdio"\n'
+            '    command: "npx"\n'
+            '  - name: "web"\n'
+            '    transport: "http"\n'
+            '    url: "http://localhost:8080/mcp"\n'
+            '    role: "public"\n'
+        )
+        path = config_file(content)
+        cfg = AgentConfig.from_file(path)
+        assert len(cfg.mcp_servers) == 2
+        assert cfg.mcp_servers[0].name == "fs"
+        assert cfg.mcp_servers[1].name == "web"
+        assert cfg.mcp_servers[1].role == "public"
+
+    def test_duplicate_names_raises(self, config_file):
+        content = (
+            'admin_phone: "123"\n'
+            "mcp_servers:\n"
+            '  - name: "fs"\n'
+            '    transport: "stdio"\n'
+            '    command: "npx"\n'
+            '  - name: "fs"\n'
+            '    transport: "http"\n'
+            '    url: "http://localhost/mcp"\n'
+        )
+        path = config_file(content)
+        with pytest.raises(ValueError, match="Duplicate MCP server name: 'fs'"):
+            AgentConfig.from_file(path)
+
+    def test_invalid_server_entry_propagates(self, config_file):
+        content = (
+            'admin_phone: "123"\n'
+            "mcp_servers:\n"
+            "  - transport: stdio\n"
+            "    command: npx\n"
+        )
+        path = config_file(content)
+        with pytest.raises(ValueError, match="missing 'name'"):
+            AgentConfig.from_file(path)
+
+    def test_mcp_servers_is_tuple(self, config_file):
+        content = (
+            'admin_phone: "123"\n'
+            "mcp_servers:\n"
+            '  - name: "fs"\n'
+            '    transport: "stdio"\n'
+            '    command: "npx"\n'
+        )
+        path = config_file(content)
+        cfg = AgentConfig.from_file(path)
+        assert isinstance(cfg.mcp_servers, tuple)

@@ -4,23 +4,57 @@ A personal AI assistant that lives on WhatsApp. Built with [Strands Agents](http
 
 No API keys, no cloud messaging service — it connects directly to WhatsApp Web via QR code, polls for messages, and responds through an LLM on Amazon Bedrock.
 
-![WhatsApp Agent Architecture](image.png)
-
 ```
 You (WhatsApp) → neonize → poll loop → Strands Agent (LLM) → tools → neonize → WhatsApp
 ```
 
 ## Design decisions
 
-Each phone number gets its own Strands agent instance with separate conversation history via `FileSessionManager`. No cross-contamination.
+**Session-per-phone isolation** — Each phone number gets its own Strands agent instance with separate conversation history via `FileSessionManager`. No cross-contamination.
 
-The agent receives messages as context and explicitly calls `reply` or `write_message` tools to send. If it has nothing to say, it stays silent. No auto-forwarding.
+**Agent decides when to respond** — The agent receives messages as context and explicitly calls `reply` or `write_message` tools to send. If it has nothing to say, it stays silent. No auto-forwarding.
 
-Your outgoing messages (DMs and group chats) are written directly to the session history without triggering an LLM call. The agent sees them as prior context next time it responds.
+**Zero-cost context injection** — Your outgoing messages (DMs and group chats) are written directly to the session history without triggering an LLM call. The agent sees them as prior context next time it responds.
 
-On first run, the agent starts a conversation with you (BOOTSTRAP.md) to figure out its name, personality, and vibe. Then it writes its own SOUL.md. From that point on, it has a persistent identity.
+**It becomes someone** — On first run, the agent starts a conversation with you (BOOTSTRAP.md) to figure out its name, personality, and vibe. Then it writes its own SOUL.md. From that point on, it has a persistent identity.
 
-Background tasks defined in HEARTBEAT.md run on individual intervals (`[every N min]` syntax). The agent can check in or do anything else autonomously while nobody's talking to it.
+**Filesystem as Persona** — The agent's identity and behavior are plain markdown files on disk. No database. The agent reads them on every message and can update them at runtime.
+
+**Per-task heartbeat scheduling** — Background tasks defined in HEARTBEAT.md run on individual intervals (`[every N min]` syntax). The agent can check in or do anything else autonomously while nobody's talking to it.
+
+**WhatsApp LID resolution** — WhatsApp may deliver messages with a LID (Linked ID) instead of the sender's phone number. The poll loop transparently resolves LIDs to real phone numbers using the chat JID, so routing and session isolation work correctly regardless.
+
+## MCP servers
+
+Extend the agent with external tools by registering [MCP](https://modelcontextprotocol.io/) servers in `config.yaml`. Tools are discovered automatically at startup and injected into the existing permission pipeline alongside native tools.
+
+```yaml
+mcp_servers:
+  - name: "filesystem"
+    transport: "stdio"
+    command: "npx"
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+    role: "admin"
+
+  - name: "weather"
+    transport: "http"
+    url: "http://localhost:3001/mcp"
+    role: "public"
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | yes | Unique identifier for the server |
+| `transport` | yes | `stdio` (local process) or `http` (remote) |
+| `command` | stdio only | Executable to run |
+| `args` | no | Command arguments (default: empty) |
+| `env` | no | Environment variables for stdio process |
+| `url` | http only | Server URL |
+| `role` | no | `admin` or `public` (default: `admin`) |
+
+Tools from `admin` servers are only available to the admin user. Tools from `public` servers are available to everyone — same rules as native tools.
+
+If a server fails to start, the agent logs the error and continues with the remaining servers. No MCP servers configured? The agent behaves exactly as before.
 
 ## Quick start
 
@@ -155,6 +189,25 @@ export BUCKET=wa-agent-ACCOUNT-REGION
 ```bash
 uv run pytest tests/ -v
 ```
+
+MCP-specific tests:
+
+```bash
+# Config parsing (unit + property-based)
+uv run pytest tests/test_config.py tests/test_mcp_config_properties.py -v
+
+# MCPManager lifecycle (unit + property-based)
+uv run pytest tests/test_mcp_manager.py tests/test_mcp_manager_properties.py -v
+```
+
+Manual integration test — add an MCP server to `config.yaml` and start the agent. Look for:
+
+```
+MCP server 'filesystem' started (X tools)
+▸ tools: N admin (M native + X mcp), ...
+```
+
+If the server binary isn't available, the agent logs the error and continues with native tools only.
 
 ## License
 

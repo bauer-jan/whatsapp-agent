@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 from utils import (
-    AgentConfig, HeartbeatLoop, PersonaLoader,
+    AgentConfig, HeartbeatLoop, MCPManager, PersonaLoader,
     AgentManager, WhatsAppClient,
     run_poll_loop, track_usage, log_token_totals,
 )
@@ -70,7 +70,7 @@ def main() -> None:
     )
 
     # Silence noisy third-party loggers
-    for name in ("strands.telemetry", "strands.agent", "strands.event_loop"):
+    for name in ("strands.telemetry", "strands.agent", "strands.event_loop", "strands.session.repository_session_manager"):
         logging.getLogger(name).setLevel(logging.WARNING)
 
     logger.info("─── Agent starting ───")
@@ -86,9 +86,22 @@ def main() -> None:
 
     tool_manager = ToolManager(admin_phone=config.admin_phone)
     init_admin_tools(wa_client=wa_client, persona_dir=config.persona_dir)
-    tool_manager.register_admin_tools(ALL_ADMIN_TOOLS)
-    tool_manager.register_public_tools(ALL_PUBLIC_TOOLS)
-    logger.info("▸ tools: %d admin, %d public", len(ALL_ADMIN_TOOLS), len(ALL_PUBLIC_TOOLS))
+
+    mcp_manager = MCPManager(list(config.mcp_servers))
+    mcp_manager.start_all()
+
+    admin_tools = ALL_ADMIN_TOOLS + mcp_manager.get_admin_tools()
+    public_tools = ALL_PUBLIC_TOOLS + mcp_manager.get_public_tools()
+    tool_manager.register_admin_tools(admin_tools)
+    tool_manager.register_public_tools(public_tools)
+
+    mcp_admin_count = len(mcp_manager.get_admin_tools())
+    mcp_public_count = len(mcp_manager.get_public_tools())
+    logger.info(
+        "▸ tools: %d admin (%d native + %d mcp), %d public (%d native + %d mcp)",
+        len(admin_tools), len(ALL_ADMIN_TOOLS), mcp_admin_count,
+        len(public_tools), len(ALL_PUBLIC_TOOLS), mcp_public_count,
+    )
 
     session_manager = AgentManager(
         storage_dir=config.session_storage_dir,
@@ -115,6 +128,7 @@ def main() -> None:
     try:
         run_poll_loop(wa_client, session_manager, config, shutdown_flag=lambda: _shutdown)
     finally:
+        mcp_manager.stop_all()
         heartbeat.stop()
         log_token_totals()
         logger.info("─── Agent shut down ───")

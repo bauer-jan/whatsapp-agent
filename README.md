@@ -1,4 +1,4 @@
-# WhatsApp AI Agent + MCP Support
+# Personal AI Assistant + MCP Support
 
 A personal AI assistant that runs on your own devices. You communicate with the agent through a WhatsApp self-chat. No API keys are required. It connects directly to WhatsApp Web via QR code, just like you would in a browser, polls for messages, and responds using an LLM on Amazon Bedrock.
 

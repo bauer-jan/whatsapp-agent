@@ -4,7 +4,7 @@ A personal AI assistant that lives on WhatsApp. Built with [Strands Agents](http
 
 No API keys, no cloud messaging service — it connects directly to WhatsApp Web via QR code, polls for messages, and responds through an LLM on Amazon Bedrock.
 
-[]![Screenshot](/logo.png)
+![Screenshot](/logo.png)
 
 ```
 You (WhatsApp) → neonize → poll loop → Strands Agent (LLM) → tools/MCP Server → neonize → WhatsApp

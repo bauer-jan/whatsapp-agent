@@ -1,10 +1,14 @@
 # WhatsApp AI Agent + MCP Support
 
-A personal AI assistant that lives on WhatsApp. Built with [Strands Agents](https://github.com/strands-agents/sdk-python) and [neonize](https://github.com/krypton-byte/neonize). Add MCP servers for more functionalities!
+A personal AI assistant that runs on your own devices. You communicate with the agent through a WhatsApp self-chat. No API keys are required. It connects directly to WhatsApp Web via QR code, just like you would in a browser, polls for messages, and responds using an LLM on Amazon Bedrock.
+
+The agent can schedule tasks and access other systems through MCP, including email, the internet, services, and databases. Just add them via the config file. 
+
+Similar to OpenClaw, the agent includes structured system files such as `SOUL.md`, `USER.md`, and `HEARTBEAT.md` to create a identity for the user and agent.
+
+Built with [Strands Agents](https://github.com/strands-agents/sdk-python) and [neonize](https://github.com/krypton-byte/neonize).
 
 ![Screenshot](/logo.png)
-
-No API keys, no cloud messaging service — it connects directly to WhatsApp Web via QR code, polls for messages, and responds through an LLM on Amazon Bedrock.
 
 ```
 You (WhatsApp) → neonize → poll loop → Strands Agent (LLM) → tools/MCP Server → neonize → WhatsApp
@@ -45,7 +49,7 @@ If a server fails to start, the agent logs the error and continues with the rema
 
 ## Design decisions
 
-**Session-per-phone isolation** — Each phone number gets its own Strands agent instance with separate conversation history via `FileSessionManager`. No cross-contamination.
+**Session-per-number isolation** — Each phone number gets its own Strands agent instance with separate conversation history via `FileSessionManager`. No cross-contamination.
 
 **Agent decides when to respond** — The agent receives messages as context and explicitly calls `reply` or `write_message` tools to send. If it has nothing to say, it stays silent. No auto-forwarding.
 

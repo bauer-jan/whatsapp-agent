@@ -76,6 +76,12 @@ log_level: "INFO"
 log_file: "agent.log"
 
 ## Add Additional MCP Configurations
+#mcp_servers:
+#  - name: "filesystem"
+#    transport: "stdio"
+#    command: "npx"
+#    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+#    role: "admin"
 ```
 
 `response_mode` controls who gets a reply:

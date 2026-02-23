@@ -1,6 +1,6 @@
 # Personal AI Assistant + MCP Support
 
-A personal AI assistant that runs on your own devices. You communicate with the agent through a WhatsApp self-chat. No API keys are required. It connects directly to WhatsApp Web via QR code, just like you would in a browser, polls for messages, and responds using an LLM on Amazon Bedrock.
+A lightweight AI assistant that runs on your own devices. You communicate with the agent through a WhatsApp self-chat. No API keys are required. It connects directly to WhatsApp Web via QR code, just like you would in a browser, polls for messages, and responds using an LLM on Amazon Bedrock.
 
 The agent can schedule tasks and access other systems through MCP, including email, the internet, services, and databases. Just add them via the config file. 
 

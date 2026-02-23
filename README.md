@@ -1,4 +1,4 @@
-# James - A lightweight AI with MCP Support
+# James - A lightweight Agent with MCP Support
 
 Introducing you to James, a lightweight AI assistant that runs on your own devices. You communicate with the agent through a WhatsApp self-chat. No API keys are required. It connects directly to WhatsApp Web via QR code, just like you would in a browser, polls for messages, and responds using an LLM on Amazon Bedrock.
 

@@ -1,14 +1,14 @@
 # James - A lightweight Agent with MCP Support
 
-Introducing you to James, a lightweight AI assistant that runs on your own devices. You communicate with the agent through a WhatsApp self-chat. No API keys are required. It connects directly to WhatsApp Web via QR code, just like you would in a browser, polls for messages, and responds using an LLM on Amazon Bedrock.
+James, a lightweight AI assistant that runs on your device. Chat with it through a WhatsApp self-chat. It connects via WhatsApp Web using a QR code.
 
 <p align="center">
   <img src="/james1.png" style="max-width: 100%;" width="60%">
 </p>
 
-The agent can schedule tasks and access other systems through MCP, including email, the internet, services, and databases. Just add them via the config file. 
+James can schedule tasks and access other systems through MCP, including email, the internet, services, and databases. Just add them via the config file. 
 
-Similar to OpenClaw, the agent includes structured system files such as `SOUL.md`, `USER.md`, and `HEARTBEAT.md` to create a identity for the user and agent.
+Similar to OpenClaw, James includes structured system files such as `SOUL.md`, `USER.md`, and `HEARTBEAT.md` to create a identity for the user and agent.
 
 Built with [Strands Agents](https://github.com/strands-agents/sdk-python) and [neonize](https://github.com/krypton-byte/neonize).
 

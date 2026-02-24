@@ -1,12 +1,11 @@
 # James - A lightweight Agent with MCP Support
 
-James, a lightweight AI assistant that runs on your device. Chat with it through a WhatsApp self-chat. It connects via WhatsApp Web using a QR code.
+James, a lightweight AI assistant that runs on your device. Chat with it through a WhatsApp self-chat. It connects via WhatsApp Web using a QR code. James can schedule tasks and access other systems through MCP, including email, the internet, services, and databases. Just add them via the config file. 
+
 
 <p align="center">
   <img src="/james1.png" style="max-width: 100%;" width="60%">
 </p>
-
-James can schedule tasks and access other systems through MCP, including email, the internet, services, and databases. Just add them via the config file. 
 
 Similar to OpenClaw, James includes structured system files such as `SOUL.md`, `USER.md`, and `HEARTBEAT.md` to create a identity for the user and agent.
 

@@ -17,6 +17,8 @@ from tools import (
     init_admin_tools,
 )
 
+from utils.model_factory import validate_model_credentials
+
 logger = logging.getLogger(__name__)
 
 _shutdown = False
@@ -32,10 +34,21 @@ def _wait_for_whatsapp(wa_client: WhatsAppClient, timeout: int = 60) -> None:
     """Block until WhatsApp connects or timeout expires."""
     logger.info("WhatsApp connecting (waiting up to %ds)…", timeout)
     for _ in range(timeout):
+        if wa_client.connection_error:
+            raise ConnectionError(wa_client.connection_error)
         if wa_client.is_connected():
-            break
+            logger.info("WhatsApp connected")
+            return
         time.sleep(1)
-    logger.info("WhatsApp %s", "connected" if wa_client.is_connected() else "NOT connected — continuing")
+    if wa_client.connection_error:
+        raise ConnectionError(wa_client.connection_error)
+    if wa_client.is_connected():
+        logger.info("WhatsApp connected")
+        return
+    raise ConnectionError(
+        "WhatsApp did not connect within the pairing timeout. "
+        "Restart and scan the QR code; model tasks have not been started."
+    )
 
 
 def _run_bootstrap(config: AgentConfig, persona_loader: PersonaLoader, session_manager: AgentManager) -> None:
@@ -50,7 +63,7 @@ def _run_bootstrap(config: AgentConfig, persona_loader: PersonaLoader, session_m
         session = session_manager.create_bootstrap(config.admin_phone, bootstrap)
         session.agent(
             "Send your first message. One short text, 1-2 sentences. "
-            "Just say hi and ask their name. Nothing else."
+            "Introduce yourself as James and ask their name. Nothing else."
         )
         track_usage(session.agent.event_loop_metrics.accumulated_usage)
         bootstrap_path.unlink(missing_ok=True)
@@ -59,14 +72,36 @@ def _run_bootstrap(config: AgentConfig, persona_loader: PersonaLoader, session_m
         logger.exception("Bootstrap failed — will retry next startup")
 
 
+def _send_startup_notice(config: AgentConfig, wa_client: WhatsAppClient,
+                         mcp_manager: MCPManager, heartbeat: HeartbeatLoop) -> bool:
+    """Send one deterministic ready notice; does not require model inference."""
+    servers = mcp_manager.status_snapshot()
+    started = [s for s in servers if s["status"] == "started"]
+    unavailable = [s["name"] for s in servers if s["status"] != "started"]
+    integrations = ", ".join(f"{s['name']} ({len(s['tools'])} tools)" for s in started) or "none loaded"
+    tasks = heartbeat.status_snapshot()["configured_tasks"]
+    text = f"James is online. MCP: {integrations}. {len(tasks)} recurring task(s) configured."
+    if unavailable:
+        text += " MCP unavailable: " + ", ".join(unavailable) + "."
+    text += " Ask me what tools are available."
+    sent = wa_client.send_message(config.admin_phone, text)
+    if sent:
+        logger.info("Startup notice sent to admin")
+    else:
+        logger.warning("Startup notice could not be sent to admin")
+    return sent
+
+
 def main() -> None:
     config = AgentConfig.from_file()
+    validate_model_credentials(config.model)
 
     logging.basicConfig(
         level=getattr(logging, config.log_level, logging.INFO),
         format="%(asctime)s.%(msecs)03d %(levelname)s  %(message)s",
         datefmt="%H:%M:%S",
         handlers=[logging.StreamHandler(), logging.FileHandler(config.log_file)],
+        force=True,  # Neonize configures the root logger during import.
     )
 
     # Silence noisy third-party loggers
@@ -77,9 +112,15 @@ def main() -> None:
     logger.info("▸ admin=%s  mode=%s  poll=%.1fs",
                 config.admin_phone, config.response_mode, config.poll_interval)
 
+    startup_ts = int(time.time())
     wa_client = WhatsAppClient()
-    wa_client.connect()
-    _wait_for_whatsapp(wa_client)
+    try:
+        wa_client.connect()
+        _wait_for_whatsapp(wa_client)
+    except (ConnectionError, KeyboardInterrupt) as error:
+        wa_client.disconnect()
+        logger.error("Startup stopped: %s", error or "interrupted")
+        raise SystemExit(1) from None
 
     persona_loader = PersonaLoader(persona_dir=config.persona_dir, admin_phone=config.admin_phone)
     persona_loader.ensure_persona_files()
@@ -103,11 +144,24 @@ def main() -> None:
         len(public_tools), len(ALL_PUBLIC_TOOLS), mcp_public_count,
     )
 
+    heartbeat = None
+
+    def runtime_context():
+        return {
+            "mcp_inventory_available": True,
+            "mcp_servers": mcp_manager.status_snapshot(),
+            "whatsapp_connected": wa_client.is_connected(),
+            "response_mode": config.response_mode,
+            "heartbeat": heartbeat.status_snapshot() if heartbeat is not None else {"running": False},
+        }
+
     session_manager = AgentManager(
         storage_dir=config.session_storage_dir,
         persona_loader=persona_loader,
         tool_manager=tool_manager,
         wa_client=wa_client,
+        model_config=config.model,
+        runtime_context_provider=runtime_context,
     )
 
     _run_bootstrap(config, persona_loader, session_manager)
@@ -126,10 +180,13 @@ def main() -> None:
     logger.info("─── Agent ready ───")
 
     try:
-        run_poll_loop(wa_client, session_manager, config, shutdown_flag=lambda: _shutdown)
+        _send_startup_notice(config, wa_client, mcp_manager, heartbeat)
+        run_poll_loop(wa_client, session_manager, config, shutdown_flag=lambda: _shutdown,
+                      startup_ts=startup_ts)
     finally:
-        mcp_manager.stop_all()
         heartbeat.stop()
+        mcp_manager.stop_all()
+        wa_client.disconnect()
         log_token_totals()
         logger.info("─── Agent shut down ───")
 

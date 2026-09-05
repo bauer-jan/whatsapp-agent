@@ -137,3 +137,50 @@ class TestReloadTasks:
 
         loop._reload_tasks()
         assert len(loop.tasks) == 0
+
+
+class TestShutdown:
+    def test_stop_wakes_idle_thread_without_waiting_for_tick(self):
+        import threading
+        import time
+        from unittest.mock import patch
+
+        loop = _make_heartbeat_loop()
+        waiting = threading.Event()
+        original_wait = loop._stop_event.wait
+
+        def observe_wait(timeout):
+            waiting.set()
+            return original_wait(timeout)
+
+        with patch.object(loop._stop_event, 'wait', side_effect=observe_wait):
+            loop.start()
+            try:
+                assert waiting.wait(1), 'Heartbeat never reached its idle wait'
+                started = time.monotonic()
+                loop.stop()
+                assert time.monotonic() - started < 1
+                assert loop._thread is None
+            finally:
+                loop.stop()
+
+    def test_active_task_timeout_is_reported_and_thread_retained(self, caplog):
+        loop = _make_heartbeat_loop()
+        thread = MagicMock()
+        thread.is_alive.return_value = True
+        loop._thread = thread
+        loop._running = True
+        loop.stop()
+        assert loop._stop_event.is_set()
+        assert loop._thread is thread
+        assert not loop._running
+        assert 'active task is still running' in caplog.text
+        assert 'Heartbeat loop stopped' not in caplog.text
+
+    def test_still_running_thread_cannot_be_restarted(self):
+        import pytest
+        loop = _make_heartbeat_loop()
+        loop._thread = MagicMock()
+        loop._thread.is_alive.return_value = True
+        with pytest.raises(RuntimeError, match='already running'):
+            loop.start()

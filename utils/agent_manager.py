@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import logging
+import json
+from collections.abc import Callable
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
@@ -16,8 +19,12 @@ if TYPE_CHECKING:
     from tools.tool_manager import ToolManager
     from utils.whatsapp_client import WhatsAppClient
 
+from utils.config import ModelConfig
+from utils.model_factory import create_model
 from tools.tool_manager import SenderRole
 from tools.whatsapp_public import make_reply_tool
+from tools.runtime_status import make_runtime_status_tool
+from utils.tool_audit import ToolAudit
 from utils.whatsapp_client import normalize_phone
 
 logger = logging.getLogger(__name__)
@@ -47,11 +54,22 @@ class AgentManager:
         persona_loader: PersonaLoader,
         tool_manager: ToolManager,
         wa_client: WhatsAppClient,
+        model_config: ModelConfig | None = None,
+        runtime_context_provider: Callable[[], dict] | None = None,
     ) -> None:
         self.storage_dir = storage_dir
         self.persona_loader = persona_loader
         self.tool_manager = tool_manager
         self.wa_client = wa_client
+        self.model_config = model_config
+        self.runtime_context_provider = runtime_context_provider
+        self._locks: dict[str, threading.RLock] = {}
+        self._locks_guard = threading.Lock()
+
+    def session_lock(self, phone: str):
+        """Serialize history load, invocation and writes for the same session."""
+        with self._locks_guard:
+            return self._locks.setdefault(normalize_phone(phone), threading.RLock())
 
     def get_or_create(self, phone: str, reply_to: str | None = None) -> AgentSession:
         """Create a fresh agent for this phone number.
@@ -71,12 +89,46 @@ class AgentManager:
         reply_tool = make_reply_tool(self.wa_client, target)
         tools = tools + [reply_tool]
 
+        origins = {}
         if role is SenderRole.ADMIN:
+            def runtime_snapshot():
+                snapshot = dict(self.runtime_context_provider()) if self.runtime_context_provider else {
+                    "mcp_inventory_available": False,
+                    "mcp_servers": [],
+                }
+                snapshot["available_tools"] = sorted({
+                    tool.tool_name for tool in tools if isinstance(getattr(tool, "tool_name", None), str)})
+                if self.model_config is not None:
+                    snapshot["model"] = {"provider": self.model_config.provider,
+                                         "model_id": self.model_config.model_id}
+                snapshot["inventory_scope"] = (
+                    "Registered capabilities for this admin turn. MCP status describes startup "
+                    "and discovery, not a continuous reachability check. Query source tools for current data.")
+                return snapshot
+
+            tools = tools + [make_runtime_status_tool(runtime_snapshot)]
+            snapshot = runtime_snapshot()
+            for server in snapshot.get("mcp_servers", []):
+                if server["status"] == "started":
+                    origins.update({name: server["name"] for name in server["tools"]})
             system_prompt = self.persona_loader.load_admin_prompt()
+            system_prompt += (
+                "\n\n## Application runtime facts\n" + json.dumps(snapshot, ensure_ascii=False)
+                + "\nThese application-supplied facts supersede old guesses in conversation "
+                  "history about your capabilities. Use get_runtime_status for integration and "
+                  "scheduler questions. Distinguish an MCP server from the data sources it exposes. "
+                  "Do not claim that a loaded server is a live platform connection."
+            )
         else:
             system_prompt = self.persona_loader.load_public_prompt()
 
+        system_prompt += (
+            f"\n\nReply tool destination for this turn: {target}. "
+            "Contact lookups and reading other chats do not change this destination."
+        )
+
         agent = Agent(
+            model=create_model(self.model_config) if self.model_config is not None else None,
             system_prompt=system_prompt,
             tools=tools,
             conversation_manager=SummarizingConversationManager(),
@@ -85,6 +137,7 @@ class AgentManager:
                 storage_dir=self.storage_dir,
             ),
             callback_handler=None,
+            hooks=[ToolAudit(origins)],
         )
 
         logger.debug("Created agent for phone %s (session_id=%s, reply_to=%s)", normalized, session_id, target)
@@ -110,6 +163,7 @@ class AgentManager:
         reply_tool = make_reply_tool(self.wa_client, normalized)
 
         agent = Agent(
+            model=create_model(self.model_config) if self.model_config is not None else None,
             system_prompt=bootstrap_prompt,
             tools=[update_soul, update_user_profile, reply_tool],
             conversation_manager=SummarizingConversationManager(),
@@ -125,4 +179,3 @@ class AgentManager:
             session_id=session_id,
             agent=agent,
         )
-

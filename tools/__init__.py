@@ -7,7 +7,10 @@ from tools.whatsapp_admin import (
     update_soul,
     update_user_profile,
     update_heartbeat,
+    set_heartbeat_task,
+    remove_heartbeat_task,
     lookup_contact,
+    read_recent_messages,
     write_message,
 )
 from tools.whatsapp_public import ALL_PUBLIC_TOOLS
@@ -19,7 +22,10 @@ __all__ = [
     "ToolManager",
     "init_admin_tools",
     "lookup_contact",
+    "read_recent_messages",
     "update_heartbeat",
+    "set_heartbeat_task",
+    "remove_heartbeat_task",
     "update_soul",
     "update_user_profile",
     "write_message",

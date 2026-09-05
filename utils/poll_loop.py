@@ -69,22 +69,23 @@ def _handle_incoming(
     reply_to = msg.chat_id if msg.is_group else msg.sender
     logger.info("▸ %s %s → %s", chat_type, msg.sender, msg.body)
 
-    session = session_manager.get_or_create(msg.sender, reply_to=reply_to)
-    prompt = f"[Message from {msg.sender} in chat {reply_to}]: {msg.body}"
+    with session_manager.session_lock(msg.sender):
+        session = session_manager.get_or_create(msg.sender, reply_to=reply_to)
+        prompt = f"[Message from {msg.sender} in chat {reply_to}]: {msg.body}"
 
-    result = str(session.agent(prompt)).strip()
+        result = str(session.agent(prompt)).strip()
 
-    usage = session.agent.event_loop_metrics.accumulated_usage
-    tool_names = ",".join(session.agent.event_loop_metrics.tool_metrics.keys())
-    track_usage(usage)
+        usage = session.agent.event_loop_metrics.accumulated_usage
+        tool_names = ",".join(session.agent.event_loop_metrics.tool_metrics.keys())
+        track_usage(usage)
 
-    inp = usage.get("inputTokens", 0)
-    out = usage.get("outputTokens", 0)
+        inp = usage.get("inputTokens", 0)
+        out = usage.get("outputTokens", 0)
 
-    # If the agent used reply, the text response is just leftover thinking — skip it
-    display = "(silent)" if not result or tool_names else result
-    logger.info("▸ %s %s ← %s  [%d→%d tok, tools: %s]",
-                chat_type, msg.sender, display, inp, out, tool_names or "-")
+        # If the agent used reply, the text response is just leftover thinking — skip it
+        display = "(silent)" if not result or tool_names else result
+        logger.info("▸ %s %s ← %s  [%d→%d tok, tools: %s]",
+                    chat_type, msg.sender, display, inp, out, tool_names or "-")
 
 
 def _resolve_sender(msg: WhatsAppMessage) -> WhatsAppMessage:
@@ -112,8 +113,10 @@ def _route_own_group(
     if not is_allowed(config.admin_phone, config, chat_id=msg.chat_id):
         return
     logger.info("▸ GROUP %s (you): %s", msg.chat_id, msg.body)
-    session = session_manager.get_or_create(msg.chat_id)
-    _inject_context(session, f"[You wrote]: {msg.body}")
+    with session_manager.session_lock(msg.chat_id):
+        session = session_manager.get_or_create(msg.chat_id)
+        _inject_context(session, f"[You wrote]: {msg.body}")
+
 
 
 def _route_own_dm(
@@ -134,8 +137,10 @@ def _route_own_dm(
     if not is_allowed(recipient, config, chat_id=msg.chat_id):
         return
     logger.info("▸ DM → %s (you): %s", recipient, msg.body)
-    session = session_manager.get_or_create(recipient)
-    _inject_context(session, f"[You wrote to {recipient}]: {msg.body}")
+    with session_manager.session_lock(recipient):
+        session = session_manager.get_or_create(recipient)
+        _inject_context(session, f"[You wrote to {recipient}]: {msg.body}")
+
 
 
 def _route_message(
@@ -163,16 +168,19 @@ def run(
     session_manager: AgentManager,
     config: AgentConfig,
     shutdown_flag: callable = lambda: False,
+    startup_ts: int | None = None,
 ) -> None:
     """Poll WhatsApp for new messages and route them."""
-    startup_ts = int(time.time())
+    if startup_ts is None:
+        startup_ts = int(time.time())
     logger.info("Poll loop started (interval=%.1fs, mode=%s)", config.poll_interval, config.response_mode)
 
     while not shutdown_flag():
         try:
             for msg in wa_client.get_new_messages():
                 if msg.timestamp < startup_ts:
-                    logger.debug("▸ skip old msg (ts=%d < %d): %s", msg.timestamp, startup_ts, msg.body[:50])
+                    logger.info("Skipped pre-start message (timestamp=%d, startup=%d)",
+                                msg.timestamp, startup_ts)
                     continue
 
                 logger.debug("▸ raw: sender=%s chat=%s from_me=%s group=%s body=%s",

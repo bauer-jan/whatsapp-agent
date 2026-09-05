@@ -128,7 +128,9 @@ class TestAdminPromptInjection:
         tool_names = {t.tool_name for t in call_kwargs["tools"]}
         assert "update_soul" in tool_names
         assert "update_user_profile" in tool_names
-        assert "update_heartbeat" in tool_names
+        assert "set_heartbeat_task" in tool_names
+        assert "remove_heartbeat_task" in tool_names
+        assert "update_heartbeat" not in tool_names
 
     @patch("utils.agent_manager.make_reply_tool", return_value=MagicMock(tool_name="reply"))
     @patch("utils.agent_manager.Agent")

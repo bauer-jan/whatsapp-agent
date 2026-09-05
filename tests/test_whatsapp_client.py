@@ -114,3 +114,27 @@ class TestWhatsAppClientConnectionStatus:
         client = WhatsAppClient.__new__(WhatsAppClient)
         client._connected = True
         assert client.is_connected() is True
+
+
+class TestNativeShutdown:
+    def test_shutdown_cancels_native_context_and_joins_connection_thread(self):
+        client = WhatsAppClient.__new__(WhatsAppClient)
+        client.client = MagicMock()
+        client._connected = True
+        thread = MagicMock()
+        thread.is_alive.return_value = False
+        client._connection_thread = thread
+        client.disconnect()
+        client.client.stop.assert_called_once()
+        client.client.disconnect.assert_not_called()
+        thread.join.assert_called_once_with(timeout=5)
+        assert client._connection_thread is None
+        assert not client.is_connected()
+
+    def test_shutdown_before_connection_thread_starts(self):
+        client = WhatsAppClient.__new__(WhatsAppClient)
+        client.client = MagicMock()
+        client._connection_thread = None
+        client._connected = False
+        client.disconnect()
+        client.client.stop.assert_called_once()

@@ -43,3 +43,8 @@ release.tar.gz
 
 # Ruff
 .ruff_cache/
+
+# Local tooling and pairing database sidecars
+.tools/
+.cache/
+whatsapp.sqlite3-*

@@ -16,3 +16,13 @@ log_file: "agent.log"
 #    command: "npx"
 #    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
 #    role: "admin"
+
+# Omit model to retain the original Bedrock provider.
+# OpenAI requires OPENAI_API_KEY in the environment or local .env.
+model:
+  provider: openai                 # openai | anthropic | bedrock
+  model_id: gpt-4.1-mini           # choose a tool-capable model available to your account
+  max_tokens: 2048
+  # base_url: https://api.openai.com/v1
+# Anthropic: provider: anthropic, your Claude model ID, and ANTHROPIC_API_KEY.
+# Optional base_url must speak the selected provider's API, including streaming/tool calls.

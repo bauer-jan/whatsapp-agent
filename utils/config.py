@@ -6,11 +6,55 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from dotenv import load_dotenv
+from urllib.parse import urlsplit
 
 VALID_RESPONSE_MODES = {"all", "admin_only", "whitelist"}
 VALID_TRANSPORTS = {"stdio", "http"}
 VALID_ROLES = {"admin", "public"}
 DEFAULT_CONFIG_PATH = "config.yaml"
+
+
+@dataclass(frozen=True)
+class ModelConfig:
+    """Provider settings. API keys belong in the environment, never YAML."""
+
+    provider: str = "bedrock"
+    model_id: str | None = None
+    base_url: str | None = None
+    max_tokens: int = 2048
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.provider, str) or self.provider not in {"bedrock", "openai", "anthropic"}:
+            raise ValueError("model.provider must be bedrock, openai or anthropic")
+        if self.model_id is not None and (
+            not isinstance(self.model_id, str) or not self.model_id.strip()
+        ):
+            raise ValueError("model.model_id must be a non-empty string")
+        if self.provider != "bedrock" and self.model_id is None:
+            raise ValueError("model.model_id is required for OpenAI and Anthropic")
+        if type(self.max_tokens) is not int or self.max_tokens <= 0:
+            raise ValueError("model.max_tokens must be a positive integer")
+        if self.base_url is not None:
+            if self.provider == "bedrock":
+                raise ValueError("model.base_url is only supported for OpenAI and Anthropic")
+            if not isinstance(self.base_url, str):
+                raise ValueError("model.base_url must be an HTTP(S) URL")
+            url = urlsplit(self.base_url)
+            if url.scheme not in {"http", "https"} or not url.hostname:
+                raise ValueError("model.base_url must be an HTTP(S) URL")
+            if url.username or url.password or url.query or url.fragment:
+                raise ValueError("model.base_url must not contain credentials, query or fragment")
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any] | None) -> "ModelConfig":
+        if raw is None:
+            return cls()
+        if not isinstance(raw, dict):
+            raise ValueError("model must be a YAML mapping")
+        if set(raw) - {"provider", "model_id", "base_url", "max_tokens"}:
+            raise ValueError("Unknown model setting; API keys belong in environment variables")
+        return cls(**raw)
 
 
 @dataclass(frozen=True)
@@ -77,6 +121,7 @@ class AgentConfig:
     log_level: str = "INFO"
     log_file: str = "agent.log"
     mcp_servers: tuple[MCPServerConfig, ...] = ()
+    model: ModelConfig = ModelConfig()
 
     @classmethod
     def from_file(cls, path: str | None = None) -> "AgentConfig":
@@ -84,6 +129,7 @@ class AgentConfig:
         if not config_path.exists():
             raise FileNotFoundError(f"Config file not found: {config_path}")
 
+        load_dotenv(config_path.resolve().parent / ".env", override=False)
         raw = yaml.safe_load(config_path.read_text()) or {}
 
         admin_phone = raw.get("admin_phone")
@@ -126,4 +172,5 @@ class AgentConfig:
             log_level=raw.get("log_level", "INFO"),
             log_file=raw.get("log_file", "agent.log"),
             mcp_servers=mcp_servers,
+            model=ModelConfig.from_dict(raw.get("model")),
         )

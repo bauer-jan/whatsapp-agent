@@ -21,6 +21,11 @@ class MCPManager:
         self._admin_tools: list[Any] = []
         self._public_tools: list[Any] = []
         self._clients: dict[str, MCPClient] = {}
+        self._server_status = {
+            cfg.name: {"name": cfg.name, "transport": cfg.transport, "role": cfg.role,
+                       "status": "configured", "tools": []}
+            for cfg in server_configs
+        }
 
     @staticmethod
     def _make_transport_callable(config: MCPServerConfig):
@@ -45,10 +50,15 @@ class MCPManager:
     def start_all(self) -> None:
         """Start all configured MCP servers and load their tools."""
         for server_config in self._server_configs:
+            if server_config.name in self._clients:
+                continue
+            client = None
+            started = False
             try:
                 transport_callable = self._make_transport_callable(server_config)
                 client = MCPClient(transport_callable)
                 client.start()
+                started = True
 
                 tools = client.list_tools_sync()
 
@@ -58,16 +68,28 @@ class MCPManager:
                     self._public_tools.extend(tools)
 
                 self._clients[server_config.name] = client
+                self._server_status[server_config.name].update(
+                    status="started", tools=[t.tool_name for t in tools if isinstance(t.tool_name, str)])
                 logger.info(
                     "MCP server '%s' started (%d tools)",
                     server_config.name,
                     len(tools),
                 )
             except Exception:
+                self._server_status[server_config.name].update(status="failed", tools=[])
+                if started and client is not None:
+                    try:
+                        client.stop(None, None, None)
+                    except Exception:
+                        logger.exception("Failed to clean up MCP server '%s'", server_config.name)
                 logger.exception(
                     "Failed to start MCP server '%s' — skipping",
                     server_config.name,
                 )
+
+    def status_snapshot(self) -> list[dict]:
+        """Return safe startup/discovery facts, not credentials or a live health probe."""
+        return [dict(value, tools=list(value["tools"])) for value in self._server_status.values()]
 
     def get_admin_tools(self) -> list[Any]:
         """Return tools from MCP servers with role 'admin'."""
@@ -87,4 +109,8 @@ class MCPManager:
                 logger.exception(
                     "Error stopping MCP server '%s'", name
                 )
+        for name in self._clients:
+            self._server_status[name].update(status="stopped", tools=[])
         self._clients.clear()
+        self._admin_tools.clear()
+        self._public_tools.clear()

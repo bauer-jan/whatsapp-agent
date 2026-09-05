@@ -290,3 +290,30 @@ class TestStartStopLifecycle:
         # The failed client was never added, so stop is never called on it
         clients[0].stop.assert_not_called()
         assert mgr._clients == {}
+
+
+@patch("utils.mcp_manager.MCPClient")
+def test_discovery_failure_stops_started_client(mock_client_class):
+    client = mock_client_class.return_value
+    client.list_tools_sync.side_effect = RuntimeError("Discovery failed")
+    manager = MCPManager([_stdio_config()])
+    manager.start_all()
+    client.stop.assert_called_once_with(None, None, None)
+    assert not manager._clients
+    assert manager.get_admin_tools() == []
+
+
+@patch("utils.mcp_manager.MCPClient")
+def test_repeated_start_and_restart_do_not_duplicate_tools(mock_client_class):
+    tool = MagicMock()
+    mock_client_class.return_value.list_tools_sync.return_value = [tool]
+    manager = MCPManager([_stdio_config()])
+    manager.start_all()
+    manager.start_all()
+    mock_client_class.return_value.start.assert_called_once()
+    assert manager.get_admin_tools() == [tool]
+    manager.stop_all()
+    assert manager.get_admin_tools() == []
+    manager.start_all()
+    assert manager.get_admin_tools() == [tool]
+    manager.stop_all()

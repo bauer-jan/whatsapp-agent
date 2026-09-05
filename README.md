@@ -51,18 +51,47 @@ If a server fails to start, the agent logs the error and continues with the rema
 
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/getting-started/installation/)
-- AWS credentials configured (Amazon Bedrock for the LLM)
+- An OpenAI or Anthropic API key, or AWS credentials for Amazon Bedrock
 
 ### Setup
 
 ```bash
 cp config.yaml.example config.yaml
 # Edit config.yaml — set admin_phone to your number
-uv sync
+uv sync --locked
 uv run main.py
 ```
 
 **Scan the QR code with WhatsApp on first run. The agent will send you a short intro message, learn your name and preferences over a few messages, then write its own SOUL.md and USER.md. The file is deleted after bootstrap completes and won't run again.**
+
+### Model providers
+
+James supports OpenAI, Anthropic, and Amazon Bedrock through the existing Strands agent loop. Set the provider in `config.yaml`:
+
+```yaml
+model:
+  provider: openai
+  model_id: gpt-4.1-mini
+  max_tokens: 2048
+  # base_url: https://api.openai.com/v1
+```
+
+For Anthropic, use `provider: anthropic` and an available Claude model ID, for example `claude-haiku-4-5-20251001`. Omit `base_url` for the provider's default endpoint. A custom OpenAI-compatible endpoint normally ends in `/v1`; the Anthropic SDK appends `/v1/messages`, so its base URL normally does not include `/v1`. Custom endpoints must support the selected provider's streaming and tool-call protocol (and, for OpenAI, `max_completion_tokens`). Compatibility is endpoint-dependent.
+
+Keep keys in environment variables or a gitignored `.env` beside `config.yaml`:
+
+```dotenv
+OPENAI_API_KEY=your-openai-api-key
+# Or, for provider: anthropic
+ANTHROPIC_API_KEY=your-anthropic-api-key
+```
+
+Use `.env.example` as the template. Only the selected provider's key is required; existing environment variables take precedence over `.env`. API keys are not accepted in the YAML model block. Normal chat, bootstrap and heartbeat agents all use the selected model. Missing direct-provider keys fail before WhatsApp connects.
+
+Omitting `model` preserves the Bedrock provider and its default model selection. You can also set `provider: bedrock` and an explicit Bedrock `model_id`. AWS credentials are needed only for Bedrock.
+
+
+References: [OpenAI API key setup](https://developers.openai.com/api/docs/quickstart), [GPT-4.1 mini](https://developers.openai.com/api/docs/models/gpt-4.1-mini), and [Anthropic models](https://platform.claude.com/docs/en/models/overview). The integration uses the adapters shipped with the locked Strands 1.26.0 version.
 
 ### Configuration
 
@@ -113,7 +142,8 @@ Injected based on who's talking to the agent via `ToolManager`.
 - `reply` — respond to the current conversation (baked-in target via closure)
 - `write_message` — send to any phone number or group
 - `lookup_contact` — search contacts and groups by name or number
-- `update_soul` / `update_user_profile` / `update_heartbeat` — edit persona files
+- `update_soul` / `update_user_profile` — edit persona files
+- `set_heartbeat_task` / `remove_heartbeat_task` — edit one scheduled task without replacing the rest of the schedule
 
 **Public users get:**
 - `reply` — respond to the current conversation
@@ -122,6 +152,7 @@ Injected based on who's talking to the agent via `ToolManager`.
 The agent cannot call admin tools in a public session — `ToolManager` resolves the sender's role and injects only the permitted set.
 
 ## Architecture
+
 
 ```
 main.py                # Entry point, startup orchestration, bootstrap

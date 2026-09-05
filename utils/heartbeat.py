@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 import threading
-import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
@@ -40,12 +39,19 @@ class HeartbeatLoop:
         self.usage_callback = usage_callback
         self.tasks: list[HeartbeatTask] = []
         self._running = False
+        self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
         """Load tasks from HEARTBEAT.md and begin the periodic loop."""
+        if self._thread is not None and self._thread.is_alive():
+            raise RuntimeError("Heartbeat thread is already running or still stopping")
+        self._stop_event.clear()
         self.tasks = self.persona_loader.load_heartbeat_tasks()
         logger.info("Starting heartbeat loop with %d task(s)", len(self.tasks))
+        for task in self.tasks:
+            logger.info("Heartbeat scheduled: %s; first run in %d minute(s)",
+                        task.name, task.interval_minutes)
         self._running = True
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
@@ -53,10 +59,29 @@ class HeartbeatLoop:
     def stop(self) -> None:
         """Stop the heartbeat loop gracefully."""
         self._running = False
+        self._stop_event.set()
         if self._thread is not None:
             self._thread.join(timeout=_TICK_INTERVAL + 2)
+            if self._thread.is_alive():
+                logger.warning(
+                    "Heartbeat stop requested, but an active task is still running; "
+                    "the thread did not finish within the shutdown timeout"
+                )
+                return
             self._thread = None
         logger.info("Heartbeat loop stopped")
+
+    def status_snapshot(self) -> dict:
+        """Report scheduler state and current file definitions, without running tasks."""
+        return {
+            "running": self._running,
+            "configured_tasks": [
+                {"name": task.name, "interval_minutes": task.interval_minutes}
+                for task in self.persona_loader.load_heartbeat_tasks()
+            ],
+            "schedule_note": "Definitions reload every 10 seconds; tasks first run after their interval. "
+                             "Active model calls and tool calls can delay execution.",
+        }
 
     # ------------------------------------------------------------------
     # Internal
@@ -76,7 +101,7 @@ class HeartbeatLoop:
                         self._run_task(task, now)
             except Exception:
                 logger.exception("Heartbeat loop tick failed")
-            time.sleep(_TICK_INTERVAL)
+            self._stop_event.wait(_TICK_INTERVAL)
 
     def _reload_tasks(self) -> None:
         """Re-read HEARTBEAT.md and reconcile with the running task list.
@@ -124,20 +149,30 @@ class HeartbeatLoop:
         """
         try:
             logger.info("▸ Heartbeat: %s", task.name)
-            session = self.agent_manager.get_or_create(self.admin_phone, reply_to=self.admin_phone)
+            with self.agent_manager.session_lock(self.admin_phone):
+                session = self.agent_manager.get_or_create(self.admin_phone, reply_to=self.admin_phone)
 
-            session.agent(
-                f"[Heartbeat task — {task.name}]: {task.description}"
-            )
+                session.agent(
+                    f"[Heartbeat task — {task.name}]: {task.description}\n\n"
+                    f"Scheduler execution time: {datetime.now(timezone.utc).isoformat()}. "
+                    "This is a new execution. For current external "
+                    "information, call the relevant source tools during this execution. Prior "
+                    "conversation history is not a fresh observation. A new retrieval can return "
+                    "the same source timestamp; report that honestly. Follow the task's conditions "
+                    "for sending, and report unavailable sources instead of inventing updates."
+                )
 
-            usage = session.agent.event_loop_metrics.accumulated_usage
-            if self.usage_callback:
-                self.usage_callback(usage)
+                usage = session.agent.event_loop_metrics.accumulated_usage
+                if self.usage_callback:
+                    self.usage_callback(usage)
 
-            inp = usage.get("inputTokens", 0)
-            out = usage.get("outputTokens", 0)
-            logger.info("▸ Heartbeat done: %s  [%d→%d tok]", task.name, inp, out)
-            task.last_run = now
+                inp = usage.get("inputTokens", 0)
+                out = usage.get("outputTokens", 0)
+                tool_names = ",".join(session.agent.event_loop_metrics.tool_metrics.keys())
+                logger.info("▸ Heartbeat done: %s  [%d→%d tok, tools: %s]",
+                            task.name, inp, out, tool_names or "none (no message sent)")
+                task.last_run = now
+
         except Exception:
             logger.exception("Heartbeat task failed: %s", task.name)
             task.last_run = now

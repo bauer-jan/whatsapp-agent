@@ -18,7 +18,10 @@ def make_reply_tool(wa_client: WhatsAppClient, reply_to: str):
 
     @tool
     def reply(message: str) -> str:
-        """Reply to the current conversation.
+        """Reply to the sender who initiated this turn.
+
+        Reading another contact's messages does not change this destination.
+        Use write_message to send to a different person or group (admin only).
 
         Args:
             message: Text message to send.
